@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const os = require("os");
@@ -13,12 +14,21 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: "500kb" }));
 
-// Serve static files - taskpane, commands, assets
-app.use(express.static(path.join(__dirname, "..", "src", "taskpane")));
+// Serve the standalone web app at the root
+app.use(express.static(path.join(__dirname, "..", "src", "webapp")));
+
+// Serve Outlook add-in taskpane at /taskpane.html
+app.use("/taskpane.html", express.static(path.join(__dirname, "..", "src", "taskpane", "taskpane.html")));
+app.use("/taskpane.css", express.static(path.join(__dirname, "..", "src", "taskpane", "taskpane.css")));
+app.use("/taskpane.js", express.static(path.join(__dirname, "..", "src", "taskpane", "taskpane.js")));
 app.use("/assets", express.static(path.join(__dirname, "..", "src", "assets")));
 app.use(
   "/commands.html",
   express.static(path.join(__dirname, "..", "src", "commands", "commands.html"))
+);
+app.use(
+  "/commands.js",
+  express.static(path.join(__dirname, "..", "src", "commands", "commands.js"))
 );
 
 // Simple in-memory rate limiter (per IP, 10 requests per minute)
@@ -78,13 +88,10 @@ app.post("/api/analyze", rateLimit, async (req, res) => {
   }
 });
 
-// --- HTTPS Setup ---
-// Look for certificates in multiple locations:
-// 1. Local certs/ directory (manual placement)
-// 2. office-addin-dev-certs default location (~/.office-addin-dev-certs/)
+// --- Server startup ---
+// Try HTTPS first (needed for Outlook Add-in), fall back to HTTP (works for web app)
 function findCerts() {
   const locations = [
-    // Local certs/ folder (mkcert or manually placed)
     {
       cert: path.join(__dirname, "..", "certs", "localhost.crt"),
       key: path.join(__dirname, "..", "certs", "localhost.key"),
@@ -93,7 +100,6 @@ function findCerts() {
       cert: path.join(__dirname, "..", "certs", "localhost.pem"),
       key: path.join(__dirname, "..", "certs", "localhost-key.pem"),
     },
-    // office-addin-dev-certs default location
     {
       cert: path.join(os.homedir(), ".office-addin-dev-certs", "localhost.crt"),
       key: path.join(os.homedir(), ".office-addin-dev-certs", "localhost.key"),
@@ -117,23 +123,17 @@ const certs = findCerts();
 if (certs) {
   console.log(`Using certificates from: ${certs.source}`);
   https.createServer({ cert: certs.cert, key: certs.key }, app).listen(PORT, () => {
-    console.log(`Email Analyzer server running on https://localhost:${PORT}`);
-    console.log("Ensure you have ANTHROPIC_API_KEY set in your .env file.");
+    console.log(`Server running on https://localhost:${PORT}`);
+    console.log("Both the web app and Outlook add-in are available.");
   });
 } else {
-  console.error("==========================================================");
-  console.error("  NO HTTPS CERTIFICATES FOUND");
-  console.error("==========================================================");
-  console.error("");
-  console.error("Outlook Add-ins require HTTPS. Run this to generate certs:");
-  console.error("");
-  console.error("  npm run setup-certs");
-  console.error("");
-  console.error("This uses Microsoft's office-addin-dev-certs tool to create");
-  console.error("a trusted certificate for localhost on your machine.");
-  console.error("You may see a Windows security prompt — click Yes to trust it.");
-  console.error("");
-  console.error("Then run 'npm start' again.");
-  console.error("==========================================================");
-  process.exit(1);
+  // No certs — run HTTP. Web app works fine, Outlook add-in won't.
+  http.createServer(app).listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log("");
+    console.log("Open http://localhost:${PORT} in your browser to use the web app.");
+    console.log("");
+    console.log("NOTE: The Outlook Add-in requires HTTPS. To enable it later, run:");
+    console.log("  npm run setup-certs");
+  });
 }

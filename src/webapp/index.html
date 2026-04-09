@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Analyzer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    header p {
+      color: #6b7280;
+      font-size: 15px;
+      margin-top: 4px;
+    }
+
+    /* Layout: two columns on desktop, stacked on mobile */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Input panel */
+    .input-panel {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .input-panel h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #374151;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #4b5563;
+      margin-bottom: 6px;
+    }
+
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input[type="text"]:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+
+    .form-group .hint {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+
+    .analyze-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 20px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 8px;
+    }
+
+    .analyze-btn:hover { background: #1d4ed8; }
+    .analyze-btn:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results panel */
+    .results-panel {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .results-panel h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #374151;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 16px;
+      color: #9ca3af;
+    }
+
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* Result sections */
+    .result-section {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .section-header:hover { background: #f9fafb; }
+
+    .section-icon { font-size: 18px; flex-shrink: 0; }
+
+    .section-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1f2937;
+      flex-grow: 1;
+    }
+
+    .toggle-arrow {
+      font-size: 10px;
+      color: #9ca3af;
+      transition: transform 0.2s;
+    }
+
+    .section-header.collapsed .toggle-arrow { transform: rotate(-90deg); }
+
+    .section-body {
+      padding: 0 14px 14px;
+      font-size: 13px;
+      color: #4b5563;
+    }
+
+    .section-body.collapsed { display: none; }
+    .section-body p { margin-bottom: 8px; }
+    .section-body ul { margin: 8px 0 0 16px; }
+    .section-body li { margin-bottom: 6px; }
+
+    /* Issue items */
+    .issue-item {
+      display: flex;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .issue-item:last-child { border-bottom: none; }
+
+    .issue-severity {
+      flex-shrink: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+    }
+
+    .severity-high { background: #ef4444; }
+    .severity-medium { background: #f59e0b; }
+    .severity-low { background: #3b82f6; }
+
+    /* Score */
+    .score-display {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      font-size: 22px;
+      font-weight: 700;
+      margin: 8px 0;
+    }
+
+    .score-high { background: #d1fae5; color: #065f46; border: 3px solid #6ee7b7; }
+    .score-medium { background: #fef3c7; color: #92400e; border: 3px solid #fcd34d; }
+    .score-low { background: #fee2e2; color: #991b1b; border: 3px solid #fca5a5; }
+
+    .score-section { text-align: center; }
+
+    /* Revision */
+    .revision-text {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+
+    .copy-btn {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #f3f4f6;
+      color: #374151;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 8px;
+    }
+
+    .copy-btn:hover { background: #e5e7eb; }
+
+    /* Error */
+    .error-box {
+      margin-top: 16px;
+      padding: 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .error-box p { color: #dc2626; font-size: 13px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Email Analyzer</h1>
+      <p>Paste your email below to get AI-powered feedback before you send</p>
+    </header>
+
+    <div class="main-layout">
+      <!-- Left: Input -->
+      <div class="input-panel">
+        <h2>Your Email</h2>
+
+        <div class="form-group">
+          <label for="subject">Subject Line</label>
+          <input type="text" id="subject" placeholder="e.g. Re: Q3 Budget Review"/>
+        </div>
+
+        <div class="form-group">
+          <label for="composed-email">Your Email (what you're about to send)</label>
+          <textarea id="composed-email" rows="10" placeholder="Paste the email you've written here..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="thread">Conversation Thread (optional)</label>
+          <textarea id="thread" rows="8" placeholder="Paste the previous emails in the chain here, if this is a reply..."></textarea>
+          <div class="hint">Include previous messages so the analyzer can check if you've addressed everything</div>
+        </div>
+
+        <button class="analyze-btn" id="analyze-btn">
+          <span id="btn-text">Analyze My Email</span>
+          <span id="btn-spinner" class="spinner hidden"></span>
+        </button>
+
+        <div id="error-box" class="error-box hidden">
+          <p id="error-message"></p>
+        </div>
+      </div>
+
+      <!-- Right: Results -->
+      <div class="results-panel">
+        <h2>Analysis</h2>
+
+        <div id="empty-state" class="empty-state">
+          <div class="icon">&#128270;</div>
+          <p>Paste your email and click Analyze to get feedback</p>
+        </div>
+
+        <div id="results" class="hidden">
+          <!-- Intent -->
+          <div class="result-section">
+            <div class="section-header" data-toggle="intent-body">
+              <span class="section-icon">&#127919;</span>
+              <h3>Detected Intent</h3>
+              <span class="toggle-arrow">&#9660;</span>
+            </div>
+            <div id="intent-body" class="section-body"></div>
+          </div>
+
+          <!-- Completeness -->
+          <div class="result-section">
+            <div class="section-header" data-toggle="completeness-body">
+              <span class="section-icon">&#9989;</span>
+              <h3>Completeness Check</h3>
+              <span class="toggle-arrow">&#9660;</span>
+            </div>
+            <div id="completeness-body" class="section-body"></div>
+          </div>
+
+          <!-- Clarity -->
+          <div class="result-section">
+            <div class="section-header" data-toggle="clarity-body">
+              <span class="section-icon">&#128269;</span>
+              <h3>Clarity &amp; Tone</h3>
+              <span class="toggle-arrow">&#9660;</span>
+            </div>
+            <div id="clarity-body" class="section-body"></div>
+          </div>
+
+          <!-- Back-and-Forth -->
+          <div class="result-section">
+            <div class="section-header" data-toggle="backforth-body">
+              <span class="section-icon">&#128260;</span>
+              <h3>Back-and-Forth Prevention</h3>
+              <span class="toggle-arrow">&#9660;</span>
+            </div>
+            <div id="backforth-body" class="section-body"></div>
+          </div>
+
+          <!-- Suggested Revision -->
+          <div class="result-section">
+            <div class="section-header" data-toggle="revision-body">
+              <span class="section-icon">&#9999;&#65039;</span>
+              <h3>Suggested Revision</h3>
+              <span class="toggle-arrow">&#9660;</span>
+            </div>
+            <div id="revision-body" class="section-body">
+              <div id="revision-text" class="revision-text"></div>
+              <button id="copy-btn" class="copy-btn hidden">Copy to Clipboard</button>
+            </div>
+          </div>
+
+          <!-- Score -->
+          <div class="result-section">
+            <div class="section-header">
+              <span class="section-icon">&#127942;</span>
+              <h3>Overall Score</h3>
+            </div>
+            <div class="section-body score-section">
+              <div id="score-display" class="score-display"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+
+    document.getElementById("analyze-btn").addEventListener("click", runAnalysis);
+    document.getElementById("copy-btn").addEventListener("click", copyRevision);
+
+    // Toggle sections
+    document.querySelectorAll(".section-header[data-toggle]").forEach((header) => {
+      header.addEventListener("click", () => {
+        const targetId = header.getAttribute("data-toggle");
+        const body = document.getElementById(targetId);
+        header.classList.toggle("collapsed");
+        body.classList.toggle("collapsed");
+      });
+    });
+
+    async function runAnalysis() {
+      const composedEmail = document.getElementById("composed-email").value.trim();
+      const thread = document.getElementById("thread").value.trim();
+      const subject = document.getElementById("subject").value.trim();
+
+      if (!composedEmail) {
+        showError("Please paste your email content first.");
+        return;
+      }
+
+      const btn = document.getElementById("analyze-btn");
+      const btnText = document.getElementById("btn-text");
+      btn.disabled = true;
+      btnText.textContent = "Analyzing...";
+      show("btn-spinner");
+      hide("error-box");
+      hide("results");
+      show("empty-state");
+
+      try {
+        const response = await fetch(`${API_BASE}/api/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            composedEmail: composedEmail,
+            conversationThread: thread,
+            subject: subject || "(No subject)",
+            recipients: [],
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `Server error (${response.status})`);
+        }
+
+        const analysis = await response.json();
+        renderResults(analysis);
+        hide("empty-state");
+        show("results");
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = "Analyze My Email";
+        hide("btn-spinner");
+      }
+    }
+
+    function renderResults(analysis) {
+      // Intent
+      document.getElementById("intent-body").innerHTML = `
+        <p><strong>${esc(analysis.intent.summary)}</strong></p>
+        <p>${esc(analysis.intent.details)}</p>
+      `;
+
+      // Completeness
+      const completenessHtml = analysis.completeness.items
+        .map((item) => `
+          <div class="issue-item">
+            <div class="issue-severity severity-${item.addressed ? "low" : "high"}"></div>
+            <div>
+              <strong>${esc(item.question)}</strong><br/>
+              <span>${esc(item.assessment)}</span>
+            </div>
+          </div>`)
+        .join("");
+      document.getElementById("completeness-body").innerHTML =
+        analysis.completeness.items.length > 0
+          ? completenessHtml
+          : "<p>No specific questions found in the thread to check against.</p>";
+
+      // Clarity
+      const clarityItems = analysis.clarity.issues
+        .map((issue) => `
+          <div class="issue-item">
+            <div class="issue-severity severity-${issue.severity}"></div>
+            <div>${esc(issue.description)}</div>
+          </div>`)
+        .join("");
+      document.getElementById("clarity-body").innerHTML =
+        analysis.clarity.issues.length > 0
+          ? `<p>${esc(analysis.clarity.summary)}</p>${clarityItems}`
+          : `<p>${esc(analysis.clarity.summary)}</p>`;
+
+      // Back-and-forth
+      const bfItems = analysis.backAndForth.risks
+        .map((risk) => `
+          <div class="issue-item">
+            <div class="issue-severity severity-${risk.severity}"></div>
+            <div>
+              <strong>${esc(risk.issue)}</strong><br/>
+              <span>${esc(risk.suggestion)}</span>
+            </div>
+          </div>`)
+        .join("");
+      document.getElementById("backforth-body").innerHTML =
+        analysis.backAndForth.risks.length > 0
+          ? `<p>${esc(analysis.backAndForth.summary)}</p>${bfItems}`
+          : `<p>${esc(analysis.backAndForth.summary)}</p>`;
+
+      // Revision
+      if (analysis.suggestedRevision) {
+        document.getElementById("revision-text").textContent = analysis.suggestedRevision;
+        show("copy-btn");
+      } else {
+        document.getElementById("revision-text").textContent = "Your email looks good — no revision needed.";
+        hide("copy-btn");
+      }
+
+      // Score
+      const score = analysis.overallScore;
+      const scoreEl = document.getElementById("score-display");
+      scoreEl.textContent = `${score}/10`;
+      scoreEl.className = "score-display";
+      if (score >= 8) scoreEl.classList.add("score-high");
+      else if (score >= 5) scoreEl.classList.add("score-medium");
+      else scoreEl.classList.add("score-low");
+    }
+
+    function copyRevision() {
+      const text = document.getElementById("revision-text").textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById("copy-btn");
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = "Copy to Clipboard"; }, 2000);
+      });
+    }
+
+    function showError(msg) {
+      document.getElementById("error-message").textContent = msg;
+      show("error-box");
+    }
+
+    function show(id) { document.getElementById(id).classList.remove("hidden"); }
+    function hide(id) { document.getElementById(id).classList.add("hidden"); }
+
+    function esc(text) {
+      const div = document.createElement("div");
+      div.textContent = text || "";
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
