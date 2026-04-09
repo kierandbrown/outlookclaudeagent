@@ -18,13 +18,41 @@ app.use(
   express.static(path.join(__dirname, "..", "src", "commands", "commands.html"))
 );
 
+// Simple in-memory rate limiter (per IP, 10 requests per minute)
+const rateLimitMap = new Map();
+function rateLimit(req, res, next) {
+  const ip = req.ip;
+  const now = Date.now();
+  const windowMs = 60000;
+  const maxRequests = 10;
+
+  if (!rateLimitMap.has(ip)) {
+    rateLimitMap.set(ip, []);
+  }
+  const timestamps = rateLimitMap.get(ip).filter((t) => now - t < windowMs);
+  if (timestamps.length >= maxRequests) {
+    return res.status(429).json({ error: "Too many requests. Please wait a moment." });
+  }
+  timestamps.push(now);
+  rateLimitMap.set(ip, timestamps);
+  next();
+}
+
+// Strip script tags and event handlers from email content before analysis
+function sanitizeInput(text) {
+  if (!text) return text;
+  return text
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, "");
+}
+
 // Health check
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
 // Main analysis endpoint
-app.post("/api/analyze", async (req, res) => {
+app.post("/api/analyze", rateLimit, async (req, res) => {
   const { composedEmail, conversationThread, subject, recipients } = req.body;
 
   if (!composedEmail || composedEmail.trim().length === 0) {
@@ -33,9 +61,9 @@ app.post("/api/analyze", async (req, res) => {
 
   try {
     const analysis = await analyzeEmail({
-      composedEmail,
-      conversationThread: conversationThread || "",
-      subject: subject || "(No subject)",
+      composedEmail: sanitizeInput(composedEmail),
+      conversationThread: sanitizeInput(conversationThread || ""),
+      subject: sanitizeInput(subject || "(No subject)"),
       recipients: recipients || [],
     });
     res.json(analysis);

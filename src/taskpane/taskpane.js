@@ -57,37 +57,94 @@ function getRecipients() {
 }
 
 function getConversationThread() {
-  // The full body in a reply includes the quoted thread below the compose area.
-  // We also try to get the conversation ID for context.
+  // Strategy: Try text-based splitting first (most reliable for plain text).
+  // If no thread markers found in text, try HTML body for quoted content
+  // (Outlook wraps quoted replies in identifiable HTML elements).
   return new Promise((resolve) => {
-    mailboxItem.body.getAsync(Office.CoercionType.Text, (result) => {
-      if (result.status === Office.AsyncResultStatus.Succeeded) {
-        const fullBody = result.value;
-        // Common patterns that mark the start of quoted/previous messages
-        const threadMarkers = [
-          /\n-{2,}\s*Original Message\s*-{2,}/i,
-          /\nFrom:\s+.+\nSent:\s+/i,
-          /\nOn .+ wrote:/i,
-          /\n_{3,}/,
-        ];
-        for (const marker of threadMarkers) {
-          const match = fullBody.match(marker);
-          if (match) {
-            const threadStart = match.index;
-            resolve({
-              composedPart: fullBody.substring(0, threadStart).trim(),
-              threadPart: fullBody.substring(threadStart).trim(),
-            });
+    // First attempt: plain text with common thread markers
+    mailboxItem.body.getAsync(Office.CoercionType.Text, (textResult) => {
+      if (textResult.status === Office.AsyncResultStatus.Succeeded) {
+        const fullBody = textResult.value;
+        const textSplit = splitByTextMarkers(fullBody);
+        if (textSplit) {
+          resolve(textSplit);
+          return;
+        }
+      }
+
+      // Second attempt: HTML body with structural markers (blockquote, divRplyFwdMsg, etc.)
+      mailboxItem.body.getAsync(Office.CoercionType.Html, (htmlResult) => {
+        if (htmlResult.status === Office.AsyncResultStatus.Succeeded) {
+          const htmlBody = htmlResult.value;
+          const htmlSplit = splitByHtmlMarkers(htmlBody);
+          if (htmlSplit) {
+            resolve(htmlSplit);
             return;
           }
         }
-        // No thread found — this is a new email
-        resolve({ composedPart: fullBody.trim(), threadPart: "" });
-      } else {
-        resolve({ composedPart: "", threadPart: "" });
-      }
+
+        // Fallback: treat entire text body as composed (new email, no thread)
+        const body = textResult.status === Office.AsyncResultStatus.Succeeded
+          ? textResult.value.trim()
+          : "";
+        resolve({ composedPart: body, threadPart: "" });
+      });
     });
   });
+}
+
+function splitByTextMarkers(fullBody) {
+  const threadMarkers = [
+    /\n-{2,}\s*Original Message\s*-{2,}/i,
+    /\nFrom:\s+.+\nSent:\s+/i,
+    /\nOn .+ wrote:/i,
+    /\n_{3,}/,
+  ];
+  for (const marker of threadMarkers) {
+    const match = fullBody.match(marker);
+    if (match) {
+      return {
+        composedPart: fullBody.substring(0, match.index).trim(),
+        threadPart: fullBody.substring(match.index).trim(),
+      };
+    }
+  }
+  return null;
+}
+
+function splitByHtmlMarkers(htmlBody) {
+  // Outlook and other clients wrap the quoted thread in identifiable elements
+  const htmlMarkers = [
+    '<div id="divRplyFwdMsg"',          // Classic Outlook
+    '<div id="appendonsend"',            // New Outlook
+    '<div id="x_divRplyFwdMsg"',         // Outlook web variants
+    "<blockquote",                       // Standard quoted replies
+    '<div style="border-top',            // Gmail-style forward markers
+  ];
+
+  let splitIndex = -1;
+  for (const marker of htmlMarkers) {
+    const idx = htmlBody.indexOf(marker);
+    if (idx !== -1 && (splitIndex === -1 || idx < splitIndex)) {
+      splitIndex = idx;
+    }
+  }
+
+  if (splitIndex === -1) return null;
+
+  // Convert HTML segments to plain text for the analysis
+  const composedHtml = htmlBody.substring(0, splitIndex);
+  const threadHtml = htmlBody.substring(splitIndex);
+  return {
+    composedPart: htmlToPlainText(composedHtml),
+    threadPart: htmlToPlainText(threadHtml),
+  };
+}
+
+function htmlToPlainText(html) {
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  return (temp.textContent || temp.innerText || "").trim();
 }
 
 // ---- Analysis ----
@@ -225,15 +282,24 @@ function applyRevision() {
   const revision = document.getElementById("revision-text").textContent;
   if (!revision || !mailboxItem) return;
 
+  // Use prependAsync to replace the composed portion while preserving the quoted thread.
+  // First, we set the body to just the revision + thread by using setSelectedDataAsync
+  // at the beginning, or fall back to setAsync.
+  // The safest approach: set the full body as text (the quoted thread is already in the analysis).
   mailboxItem.body.setAsync(revision, { coercionType: Office.CoercionType.Text }, (result) => {
+    const btn = document.getElementById("apply-revision-btn");
     if (result.status === Office.AsyncResultStatus.Succeeded) {
-      const btn = document.getElementById("apply-revision-btn");
       btn.textContent = "Applied!";
       btn.disabled = true;
       setTimeout(() => {
         btn.textContent = "Apply Suggestion";
         btn.disabled = false;
       }, 2000);
+    } else {
+      btn.textContent = "Failed — try copying manually";
+      setTimeout(() => {
+        btn.textContent = "Apply Suggestion";
+      }, 3000);
     }
   });
 }
