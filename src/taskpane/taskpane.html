@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Analyzer</title>
+  <link rel="stylesheet" href="taskpane.css"/>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Email Analyzer</h1>
+      <p class="subtitle">AI-powered email review before you send</p>
+    </header>
+
+    <div id="not-compose" class="message-box hidden">
+      <p>Open a new email or reply to use the analyzer.</p>
+    </div>
+
+    <div id="compose-view">
+      <button id="analyze-btn" class="primary-btn">
+        <span id="btn-text">Analyze My Email</span>
+        <span id="btn-spinner" class="spinner hidden"></span>
+      </button>
+
+      <div id="results" class="hidden">
+        <!-- Intent Section -->
+        <section class="result-section">
+          <div class="section-header" data-toggle="intent-body">
+            <span class="section-icon">&#127919;</span>
+            <h2>Detected Intent</h2>
+            <span class="toggle-arrow">&#9660;</span>
+          </div>
+          <div id="intent-body" class="section-body"></div>
+        </section>
+
+        <!-- Completeness Section -->
+        <section class="result-section">
+          <div class="section-header" data-toggle="completeness-body">
+            <span class="section-icon">&#9989;</span>
+            <h2>Completeness Check</h2>
+            <span class="toggle-arrow">&#9660;</span>
+          </div>
+          <div id="completeness-body" class="section-body"></div>
+        </section>
+
+        <!-- Clarity Section -->
+        <section class="result-section">
+          <div class="section-header" data-toggle="clarity-body">
+            <span class="section-icon">&#128269;</span>
+            <h2>Clarity &amp; Tone</h2>
+            <span class="toggle-arrow">&#9660;</span>
+          </div>
+          <div id="clarity-body" class="section-body"></div>
+        </section>
+
+        <!-- Back-and-Forth Prevention -->
+        <section class="result-section">
+          <div class="section-header" data-toggle="backforth-body">
+            <span class="section-icon">&#128260;</span>
+            <h2>Back-and-Forth Prevention</h2>
+            <span class="toggle-arrow">&#9660;</span>
+          </div>
+          <div id="backforth-body" class="section-body"></div>
+        </section>
+
+        <!-- Suggested Revision -->
+        <section class="result-section">
+          <div class="section-header" data-toggle="revision-body">
+            <span class="section-icon">&#9999;&#65039;</span>
+            <h2>Suggested Revision</h2>
+            <span class="toggle-arrow">&#9660;</span>
+          </div>
+          <div id="revision-body" class="section-body">
+            <div id="revision-text"></div>
+            <button id="apply-revision-btn" class="secondary-btn hidden">Apply Suggestion</button>
+          </div>
+        </section>
+
+        <!-- Overall Score -->
+        <section class="result-section score-section">
+          <div class="section-header">
+            <span class="section-icon">&#127942;</span>
+            <h2>Overall Score</h2>
+          </div>
+          <div id="score-body" class="section-body">
+            <div id="score-display"></div>
+          </div>
+        </section>
+      </div>
+
+      <div id="error-box" class="error-box hidden">
+        <p id="error-message"></p>
+        <button id="retry-btn" class="secondary-btn">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>

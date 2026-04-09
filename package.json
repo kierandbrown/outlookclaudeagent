@@ -1,0 +1,23 @@
+{
+  "name": "outlook-email-analyzer",
+  "version": "1.0.0",
+  "description": "Outlook Add-in that uses Claude AI to analyze composed emails and suggest improvements",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "lint": "eslint src/ server/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
