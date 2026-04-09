@@ -2,9 +2,9 @@ require("dotenv").config();
 const express = require("express");
 const https = require("https");
 const fs = require("fs");
+const os = require("os");
 const cors = require("cors");
 const path = require("path");
-const selfsigned = require("selfsigned");
 const { analyzeEmail } = require("./analyze");
 
 const app = express();
@@ -79,48 +79,61 @@ app.post("/api/analyze", rateLimit, async (req, res) => {
 });
 
 // --- HTTPS Setup ---
-// Use provided cert files if they exist, otherwise auto-generate a self-signed cert.
-const certsDir = path.join(__dirname, "..", "certs");
-const certPath = path.join(certsDir, "localhost.pem");
-const keyPath = path.join(certsDir, "localhost-key.pem");
+// Look for certificates in multiple locations:
+// 1. Local certs/ directory (manual placement)
+// 2. office-addin-dev-certs default location (~/.office-addin-dev-certs/)
+function findCerts() {
+  const locations = [
+    // Local certs/ folder (mkcert or manually placed)
+    {
+      cert: path.join(__dirname, "..", "certs", "localhost.crt"),
+      key: path.join(__dirname, "..", "certs", "localhost.key"),
+    },
+    {
+      cert: path.join(__dirname, "..", "certs", "localhost.pem"),
+      key: path.join(__dirname, "..", "certs", "localhost-key.pem"),
+    },
+    // office-addin-dev-certs default location
+    {
+      cert: path.join(os.homedir(), ".office-addin-dev-certs", "localhost.crt"),
+      key: path.join(os.homedir(), ".office-addin-dev-certs", "localhost.key"),
+    },
+  ];
 
-let httpsOptions;
-
-if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-  // Use existing certs (e.g. from mkcert)
-  httpsOptions = {
-    cert: fs.readFileSync(certPath),
-    key: fs.readFileSync(keyPath),
-  };
-  console.log("Using existing certificates from certs/ directory.");
-} else {
-  // Auto-generate a self-signed certificate
-  console.log("No certs found — generating self-signed certificate...");
-  const attrs = [{ name: "commonName", value: "localhost" }];
-  const pems = selfsigned.generate(attrs, {
-    days: 365,
-    keySize: 2048,
-    algorithm: "sha256",
-  });
-  httpsOptions = {
-    cert: pems.cert,
-    key: pems.private,
-  };
-
-  // Save them so the browser can be told to trust them
-  if (!fs.existsSync(certsDir)) {
-    fs.mkdirSync(certsDir, { recursive: true });
+  for (const loc of locations) {
+    if (fs.existsSync(loc.cert) && fs.existsSync(loc.key)) {
+      return {
+        cert: fs.readFileSync(loc.cert),
+        key: fs.readFileSync(loc.key),
+        source: path.dirname(loc.cert),
+      };
+    }
   }
-  fs.writeFileSync(certPath, pems.cert);
-  fs.writeFileSync(keyPath, pems.private);
-  console.log(`Self-signed certs saved to ${certsDir}`);
+  return null;
 }
 
-https.createServer(httpsOptions, app).listen(PORT, () => {
-  console.log(`Email Analyzer server running on https://localhost:${PORT}`);
-  console.log("Ensure you have ANTHROPIC_API_KEY set in your .env file.");
-  console.log("");
-  console.log("NOTE: If using a self-signed cert, you will need to open");
-  console.log(`  https://localhost:${PORT}  in your browser and accept the`);
-  console.log("  security warning once before the Outlook add-in can connect.");
-});
+const certs = findCerts();
+
+if (certs) {
+  console.log(`Using certificates from: ${certs.source}`);
+  https.createServer({ cert: certs.cert, key: certs.key }, app).listen(PORT, () => {
+    console.log(`Email Analyzer server running on https://localhost:${PORT}`);
+    console.log("Ensure you have ANTHROPIC_API_KEY set in your .env file.");
+  });
+} else {
+  console.error("==========================================================");
+  console.error("  NO HTTPS CERTIFICATES FOUND");
+  console.error("==========================================================");
+  console.error("");
+  console.error("Outlook Add-ins require HTTPS. Run this to generate certs:");
+  console.error("");
+  console.error("  npm run setup-certs");
+  console.error("");
+  console.error("This uses Microsoft's office-addin-dev-certs tool to create");
+  console.error("a trusted certificate for localhost on your machine.");
+  console.error("You may see a Windows security prompt — click Yes to trust it.");
+  console.error("");
+  console.error("Then run 'npm start' again.");
+  console.error("==========================================================");
+  process.exit(1);
+}

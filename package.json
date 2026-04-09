@@ -6,17 +6,18 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
+    "setup-certs": "npx office-addin-dev-certs install --days 365",
     "lint": "eslint src/ server/"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "selfsigned": "^2.4.1"
+    "express": "^4.21.2"
   },
   "devDependencies": {
-    "eslint": "^9.0.0"
+    "eslint": "^9.0.0",
+    "office-addin-dev-certs": "^1.14.1"
   },
   "engines": {
     "node": ">=18.0.0"
